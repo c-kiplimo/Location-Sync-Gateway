@@ -1,0 +1,14 @@
+micronaut:
+  application:
+    name: location-sync-gateway
+  server:
+    port: 8080
+
+netty:
+  default:
+    allocator:
+      max-order: 3
+
+logger:
+  levels:
+    com.locationsync.gateway: DEBUG
