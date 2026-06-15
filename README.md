@@ -121,20 +121,36 @@ flowchart TD
 
     REDIS --> API
 
-    style EXTERNAL fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
-    style CONNECTORS fill:#E8F5E9,stroke:#388E3C,stroke-width:2px
-    style INGEST fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
-    style KAFKA fill:#212121,stroke:#000,stroke-width:2px,color:#fff
-    style DETECT fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
-    style RESOLVE fill:#FFF9C4,stroke:#F9A825,stroke-width:2px
-    style OUTCOMES fill:#FCE4EC,stroke:#C2185B,stroke-width:2px
-    style EXECUTION fill:#E0F2F1,stroke:#00796B,stroke-width:2px
-    style REDIS fill:#FFEBEE,stroke:#C62828,stroke-width:2px
-    style API fill:#ECEFF1,stroke:#455A64,stroke-width:2px
+    style EXTERNAL fill:#ffffff,stroke:#1976D2,stroke-width:3px,color:#000
+    style CONNECTORS fill:#ffffff,stroke:#388E3C,stroke-width:3px,color:#000
+    style INGEST fill:#ffffff,stroke:#F57C00,stroke-width:3px,color:#000
+    style KAFKA fill:#ffffff,stroke:#000,stroke-width:3px,color:#000
+    style DETECT fill:#ffffff,stroke:#7B1FA2,stroke-width:3px,color:#000
+    style RESOLVE fill:#ffffff,stroke:#F9A825,stroke-width:3px,color:#000
+    style OUTCOMES fill:#ffffff,stroke:#C2185B,stroke-width:3px,color:#000
+    style EXECUTION fill:#ffffff,stroke:#00796B,stroke-width:3px,color:#000
+    style REDIS fill:#ffffff,stroke:#C62828,stroke-width:3px,color:#000
+    style API fill:#ffffff,stroke:#455A64,stroke-width:3px,color:#000
 
-    style ACCEPT fill:#C8E6C9,stroke:#388E3C,stroke-width:2px
-    style REVERT fill:#FFECB3,stroke:#F57C00,stroke-width:2px
-    style REVIEW fill:#FFCDD2,stroke:#D32F2F,stroke-width:2px
+    style GMB fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
+    style POS fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
+    style ERP fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
+    style FRAN fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
+
+    style GMB_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style POS_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style ERP_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style FRAN_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style WH_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style CUSTOM fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+
+    style ACCEPT fill:#ffffff,stroke:#4CAF50,stroke-width:3px,color:#000
+    style REVERT fill:#ffffff,stroke:#FF9800,stroke-width:3px,color:#000
+    style REVIEW fill:#ffffff,stroke:#F44336,stroke-width:3px,color:#000
+
+    style UBERALL fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
+    style DB fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
+    style NOTIFY fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
 ```
 
 <p align="center">
