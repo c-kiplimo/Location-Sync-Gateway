@@ -45,92 +45,82 @@ Head office sets standard hours 9-6 → Local franchisee knows their market need
 ## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph EXTERNAL["🌐 EXTERNAL SOURCES"]
-        GMB["Google My Business API<br/>(OAuth 2.0)"]
-        POS["POS System<br/>(REST API)"]
-        ERP["ERP System<br/>(REST API)"]
-        FRAN["Franchise Data API"]
+flowchart LR
+    subgraph SOURCES["🌐 EXTERNAL SOURCES"]
+        direction TB
+        GMB["Google My Business<br/>(OAuth 2.0)"]
+        POS["POS System"]
+        ERP["ERP System"]
+        FRAN["Franchise API"]
     end
 
-    subgraph CONNECTORS["🔌 CONNECTOR LAYER (Pluggable Adapters)"]
-        GMB_CONN["GoogleMyBusinessConnector<br/><small>Token refresh, rate limits</small>"]
-        POS_CONN["PosSystemConnector<br/><small>Closure inference</small>"]
-        ERP_CONN["ErpSystemConnector<br/><small>Planned closures</small>"]
-        FRAN_CONN["FranchiseApiConnector<br/><small>Franchisee data</small>"]
-        WH_CONN["WebhookConnector<br/><small>Push-based events</small>"]
-        CUSTOM["CustomConnector<br/><small>Extensible interface</small>"]
+    subgraph CONNECTORS["🔌 CONNECTOR LAYER"]
+        direction TB
+        GMB_CONN["GoogleConnector"]
+        POS_CONN["PosConnector"]
+        ERP_CONN["ErpConnector"]
+        FRAN_CONN["FranchiseConnector"]
+        WH_CONN["WebhookConnector"]
+        CUSTOM["CustomConnector"]
     end
 
-    INGEST["⚙️ INGESTION ENGINE<br/>(@Scheduled)<br/><small>• Pull per schedule<br/>• Deduplicate<br/>• Validate schema<br/>• Publish to Kafka</small>"]
-
-    KAFKA["📨 KAFKA<br/>Topic: location.snapshots<br/><small>(Event streaming)</small>"]
-
-    DETECT["🔍 CONFLICT DETECTOR<br/><small>Compare snapshot vs Uberall<br/>GET /api/locations/{id}</small>"]
-
-    RESOLVE["⚖️ RESOLUTION ENGINE<br/><small>• Load YAML rules<br/>• Match field + source<br/>• Apply confidence check</small>"]
-
-    subgraph OUTCOMES["📊 RESOLUTION OUTCOMES"]
-        ACCEPT["✅ AUTO_ACCEPT<br/><small>External value correct</small>"]
-        REVERT["🔄 AUTO_REVERT<br/><small>Uberall authoritative</small>"]
-        REVIEW["⚠️ FLAG_FOR_REVIEW<br/><small>Human decision needed</small>"]
+    subgraph INGESTION["⚙️ INGESTION"]
+        direction TB
+        INGEST["Scheduler<br/>(@Scheduled)<br/>Pull • Validate<br/>Deduplicate"]
+        KAFKA["Kafka<br/>location.snapshots"]
     end
 
-    subgraph EXECUTION["🎯 EXECUTION LAYER"]
-        UBERALL["🌐 UBERALL API EXECUTOR<br/><small>• PATCH locations<br/>• Idempotency<br/>• Retry logic<br/>• Rate limits</small>"]
-        DB["🗄️ POSTGRESQL<br/>AUDIT LOG<br/><small>• Conflicts<br/>• Decisions<br/>• Rules<br/>• Mappings</small>"]
-        NOTIFY["📬 NOTIFICATION ENGINE<br/><small>• Slack alerts<br/>• Email<br/>• Webhooks</small>"]
+    subgraph PROCESSING["🔍 PROCESSING"]
+        direction TB
+        DETECT["Conflict<br/>Detector"]
+        RESOLVE["Resolution<br/>Engine<br/>(YAML Rules)"]
     end
 
-    REDIS["💾 REDIS CACHE<br/><small>• Location data<br/>• OAuth tokens<br/>• Idempotency keys</small>"]
+    subgraph OUTCOMES["📊 OUTCOMES"]
+        direction TB
+        ACCEPT["✅ AUTO_ACCEPT"]
+        REVERT["🔄 AUTO_REVERT"]
+        REVIEW["⚠️ FLAG_REVIEW"]
+    end
 
-    API["🌐 REST API<br/>(Micronaut HTTP)<br/><small>POST /sync/trigger<br/>GET /conflicts<br/>GET /decisions<br/>POST /rules<br/>GET /audit<br/>GET /health</small>"]
+    subgraph EXECUTION["🎯 EXECUTION"]
+        direction TB
+        UBERALL["Uberall API<br/>PATCH locations"]
+        DB["PostgreSQL<br/>Audit Log"]
+        NOTIFY["Notifications<br/>Slack • Email"]
+    end
 
-    GMB --> GMB_CONN
-    POS --> POS_CONN
-    ERP --> ERP_CONN
-    FRAN --> FRAN_CONN
+    subgraph INFRA["💾 INFRASTRUCTURE"]
+        direction TB
+        REDIS["Redis Cache<br/>Tokens • Data"]
+        API["REST API<br/>/sync • /conflicts<br/>/decisions"]
+    end
 
-    GMB_CONN --> INGEST
-    POS_CONN --> INGEST
-    ERP_CONN --> INGEST
-    FRAN_CONN --> INGEST
-    WH_CONN --> INGEST
-    CUSTOM --> INGEST
-
+    SOURCES --> CONNECTORS
+    CONNECTORS --> INGEST
     INGEST --> KAFKA
     KAFKA --> DETECT
     DETECT --> RESOLVE
-
     RESOLVE --> ACCEPT
     RESOLVE --> REVERT
     RESOLVE --> REVIEW
-
     ACCEPT --> UBERALL
     ACCEPT --> DB
-
     REVERT --> UBERALL
     REVERT --> DB
-
     REVIEW --> NOTIFY
     REVIEW --> DB
-
     UBERALL --> REDIS
     DB --> REDIS
-    NOTIFY --> REDIS
-
     REDIS --> API
 
-    style EXTERNAL fill:#ffffff,stroke:#1976D2,stroke-width:3px,color:#000
+    style SOURCES fill:#ffffff,stroke:#1976D2,stroke-width:3px,color:#000
     style CONNECTORS fill:#ffffff,stroke:#388E3C,stroke-width:3px,color:#000
-    style INGEST fill:#ffffff,stroke:#F57C00,stroke-width:3px,color:#000
-    style KAFKA fill:#ffffff,stroke:#000,stroke-width:3px,color:#000
-    style DETECT fill:#ffffff,stroke:#7B1FA2,stroke-width:3px,color:#000
-    style RESOLVE fill:#ffffff,stroke:#F9A825,stroke-width:3px,color:#000
+    style INGESTION fill:#ffffff,stroke:#F57C00,stroke-width:3px,color:#000
+    style PROCESSING fill:#ffffff,stroke:#7B1FA2,stroke-width:3px,color:#000
     style OUTCOMES fill:#ffffff,stroke:#C2185B,stroke-width:3px,color:#000
     style EXECUTION fill:#ffffff,stroke:#00796B,stroke-width:3px,color:#000
-    style REDIS fill:#ffffff,stroke:#C62828,stroke-width:3px,color:#000
-    style API fill:#ffffff,stroke:#455A64,stroke-width:3px,color:#000
+    style INFRA fill:#ffffff,stroke:#455A64,stroke-width:3px,color:#000
 
     style GMB fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
     style POS fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
@@ -144,6 +134,12 @@ flowchart TD
     style WH_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
     style CUSTOM fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
 
+    style INGEST fill:#ffffff,stroke:#F57C00,stroke-width:2px,color:#000
+    style KAFKA fill:#ffffff,stroke:#000,stroke-width:2px,color:#000
+
+    style DETECT fill:#ffffff,stroke:#7B1FA2,stroke-width:2px,color:#000
+    style RESOLVE fill:#ffffff,stroke:#7B1FA2,stroke-width:2px,color:#000
+
     style ACCEPT fill:#ffffff,stroke:#4CAF50,stroke-width:3px,color:#000
     style REVERT fill:#ffffff,stroke:#FF9800,stroke-width:3px,color:#000
     style REVIEW fill:#ffffff,stroke:#F44336,stroke-width:3px,color:#000
@@ -151,6 +147,9 @@ flowchart TD
     style UBERALL fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
     style DB fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
     style NOTIFY fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
+
+    style REDIS fill:#ffffff,stroke:#C62828,stroke-width:2px,color:#000
+    style API fill:#ffffff,stroke:#455A64,stroke-width:2px,color:#000
 ```
 
 <p align="center">
@@ -199,34 +198,38 @@ flowchart TD
 
 ## Quick Start
 
-### Current State: MVP1 (Proof of Concept)
+### Current Implementation Status
 
-**What's Implemented:**
-- ✅ Core conflict detection and resolution logic
-- ✅ Mock Google connector with test data
-- ✅ In-memory storage (no database required)
-- ✅ REST API for manual execution
-- ✅ Unit tests for all components
+**✅ Currently Implemented:**
+- Core conflict detection and resolution logic
+- Mock Google My Business connector with test data
+- In-memory storage (no database setup required)
+- REST API for manual sync triggering
+- Resolution engine with hardcoded rules (phone, opening hours, categories)
+- Unit tests for all core components
 
-**Not Yet Implemented:**
-- ⏳ PostgreSQL persistence
-- ⏳ Kafka event streaming
-- ⏳ Real external API integrations
-- ⏳ Scheduled execution
-- ⏳ Notifications
+**⏳ Planned Features:**
+- PostgreSQL persistence layer
+- Kafka event streaming for async processing
+- Real external API integrations (Google OAuth, POS, ERP)
+- Scheduled automated execution
+- Notification system (Slack, Email)
+- YAML-based configuration for resolution rules
+- Management dashboard UI
+- Production monitoring and observability
 
 ### Prerequisites
 - JDK 17+
 - Gradle 8+ (or use wrapper - `./gradlew`)
 
-### Run Locally (MVP1)
+### Run Locally
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/location-sync-gateway.git
-cd location-sync-gateway
+git clone https://github.com/c-kiplimo/Location-Sync-Gateway.git
+cd Location-Sync-Gateway
 
-# Run application (no Docker needed for MVP1)
+# Run application (no Docker needed for current version)
 ./gradlew run
 
 # Or on Windows
@@ -263,7 +266,7 @@ curl http://localhost:8080/api/v1/conflicts/flagged
 curl http://localhost:8080/api/v1/health
 ```
 
-### Test Scenarios (MVP1)
+### Test Scenarios
 
 | Location ID | Conflict | Expected Resolution |
 |-------------|----------|---------------------|
@@ -539,7 +542,7 @@ Auto-applied via Flyway on startup. Files in `src/main/resources/db/migration/`
 
 ## Implementation Roadmap
 
-### MVP1: Core Proof of Concept ✅ (COMPLETE)
+### Phase 1: Core Proof of Concept ✅ (COMPLETE)
 
 **Goal:** Demonstrate end-to-end conflict detection and resolution flow with minimal infrastructure.
 
@@ -564,7 +567,7 @@ Auto-applied via Flyway on startup. Files in `src/main/resources/db/migration/`
 
 ---
 
-### MVP2: Persistence & Automation ⏳ (PLANNED)
+### Phase 2: Persistence & Automation ⏳ (PLANNED)
 
 **Goal:** Make system production-ready with real persistence and automated execution.
 
@@ -619,7 +622,7 @@ Auto-applied via Flyway on startup. Files in `src/main/resources/db/migration/`
 
 ---
 
-### MVP3: Multi-Source & Event Streaming ⏳ (PLANNED)
+### Phase 3: Multi-Source & Event Streaming ⏳ (PLANNED)
 
 **Goal:** Add multiple data sources and asynchronous processing with Kafka.
 
@@ -680,7 +683,7 @@ Auto-applied via Flyway on startup. Files in `src/main/resources/db/migration/`
 
 ---
 
-### MVP4: Production & Enterprise Features ⏳ (PLANNED)
+### Phase 4: Production & Enterprise Features ⏳ (PLANNED)
 
 **Goal:** Real OAuth integration, advanced rules, and management UI.
 
@@ -905,6 +908,6 @@ MIT License - see [LICENSE](LICENSE)
 
 *Solving the data gap outside the platform boundary*
 
-[Report Bug](https://github.com/yourusername/location-sync-gateway/issues) • [Request Feature](https://github.com/yourusername/location-sync-gateway/issues)
+[Report Bug](https://github.com/c-kiplimo/Location-Sync-Gateway/issues) • [Request Feature](https://github.com/c-kiplimo/Location-Sync-Gateway/issues)
 
 </div>
