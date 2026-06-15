@@ -45,111 +45,97 @@ Head office sets standard hours 9-6 → Local franchisee knows their market need
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph SOURCES["🌐 EXTERNAL SOURCES"]
-        direction TB
+graph TB
+    subgraph EXTERNAL["🌐 EXTERNAL SOURCES"]
         GMB["Google My Business<br/>(OAuth 2.0)"]
         POS["POS System"]
         ERP["ERP System"]
-        FRAN["Franchise API"]
     end
 
-    subgraph CONNECTORS["🔌 CONNECTOR LAYER"]
-        direction TB
-        GMB_CONN["GoogleConnector"]
-        POS_CONN["PosConnector"]
-        ERP_CONN["ErpConnector"]
-        FRAN_CONN["FranchiseConnector"]
-        WH_CONN["WebhookConnector"]
-        CUSTOM["CustomConnector"]
+    subgraph GATEWAY["Location Sync Gateway Service"]
+        subgraph CONNECTOR_LAYER["🔌 Connector Layer"]
+            CONNECTORS["GoogleConnector<br/>PosConnector<br/>ErpConnector<br/>WebhookConnector"]
+        end
+
+        subgraph INGESTION_LAYER["⚙️ Ingestion Layer"]
+            SCHEDULER["@Scheduled Jobs<br/>Pull • Validate • Deduplicate"]
+            KAFKA_PROD["Kafka Producer"]
+        end
+
+        subgraph EVENT_LAYER["📨 Event Streaming"]
+            KAFKA["Kafka Topic<br/>location.snapshots"]
+        end
+
+        subgraph PROCESSING_LAYER["🔍 Processing Layer"]
+            CONSUMER["Kafka Consumer"]
+            DETECTOR["Conflict Detector"]
+            ENGINE["Resolution Engine<br/>(YAML Rules)"]
+        end
+
+        subgraph STORAGE_LAYER["💾 Storage Layer"]
+            REDIS["Redis Cache<br/>Tokens • Data"]
+            POSTGRES[(PostgreSQL<br/>Conflicts • Decisions<br/>Audit Log)]
+        end
+
+        subgraph API_LAYER["🌐 REST API"]
+            REST["Endpoints<br/>/sync • /conflicts<br/>/decisions • /rules"]
+        end
     end
 
-    subgraph INGESTION["⚙️ INGESTION"]
-        direction TB
-        INGEST["Scheduler<br/>(@Scheduled)<br/>Pull • Validate<br/>Deduplicate"]
-        KAFKA["Kafka<br/>location.snapshots"]
-    end
-
-    subgraph PROCESSING["🔍 PROCESSING"]
-        direction TB
-        DETECT["Conflict<br/>Detector"]
-        RESOLVE["Resolution<br/>Engine<br/>(YAML Rules)"]
-    end
-
-    subgraph OUTCOMES["📊 OUTCOMES"]
-        direction TB
-        ACCEPT["✅ AUTO_ACCEPT"]
-        REVERT["🔄 AUTO_REVERT"]
-        REVIEW["⚠️ FLAG_REVIEW"]
-    end
-
-    subgraph EXECUTION["🎯 EXECUTION"]
-        direction TB
+    subgraph OUTPUTS["🎯 OUTPUTS"]
         UBERALL["Uberall API<br/>PATCH locations"]
-        DB["PostgreSQL<br/>Audit Log"]
         NOTIFY["Notifications<br/>Slack • Email"]
+        CLIENTS["Client Apps<br/>Web • Mobile<br/>Dashboards"]
     end
 
-    subgraph INFRA["💾 INFRASTRUCTURE"]
-        direction TB
-        REDIS["Redis Cache<br/>Tokens • Data"]
-        API["REST API<br/>/sync • /conflicts<br/>/decisions"]
+    subgraph TECH["Tech Stack"]
+        STACK["• Kotlin + Micronaut<br/>• PostgreSQL + R2DBC<br/>• Kafka + Redis<br/>• OAuth 2.0<br/>• Prometheus"]
     end
 
-    SOURCES --> CONNECTORS
-    CONNECTORS --> INGEST
-    INGEST --> KAFKA
-    KAFKA --> DETECT
-    DETECT --> RESOLVE
-    RESOLVE --> ACCEPT
-    RESOLVE --> REVERT
-    RESOLVE --> REVIEW
-    ACCEPT --> UBERALL
-    ACCEPT --> DB
-    REVERT --> UBERALL
-    REVERT --> DB
-    REVIEW --> NOTIFY
-    REVIEW --> DB
-    UBERALL --> REDIS
-    DB --> REDIS
-    REDIS --> API
+    EXTERNAL -->|Pull Data| CONNECTORS
+    CONNECTORS --> SCHEDULER
+    SCHEDULER --> KAFKA_PROD
+    KAFKA_PROD --> KAFKA
+    KAFKA --> CONSUMER
+    CONSUMER --> DETECTOR
+    DETECTOR --> ENGINE
+    ENGINE -->|AUTO_ACCEPT| UBERALL
+    ENGINE -->|AUTO_REVERT| UBERALL
+    ENGINE -->|FLAG_REVIEW| NOTIFY
+    ENGINE --> POSTGRES
+    POSTGRES --> REDIS
+    REDIS --> REST
+    REST --> CLIENTS
 
-    style SOURCES fill:#ffffff,stroke:#1976D2,stroke-width:3px,color:#000
-    style CONNECTORS fill:#ffffff,stroke:#388E3C,stroke-width:3px,color:#000
-    style INGESTION fill:#ffffff,stroke:#F57C00,stroke-width:3px,color:#000
-    style PROCESSING fill:#ffffff,stroke:#7B1FA2,stroke-width:3px,color:#000
-    style OUTCOMES fill:#ffffff,stroke:#C2185B,stroke-width:3px,color:#000
-    style EXECUTION fill:#ffffff,stroke:#00796B,stroke-width:3px,color:#000
-    style INFRA fill:#ffffff,stroke:#455A64,stroke-width:3px,color:#000
+    style EXTERNAL fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
+    style GATEWAY fill:#E8F5E9,stroke:#388E3C,stroke-width:4px,color:#000
+    style OUTPUTS fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
+    style TECH fill:#F3E5F5,stroke:#7B1FA2,stroke-width:3px,color:#000
+
+    style CONNECTOR_LAYER fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#000
+    style INGESTION_LAYER fill:#FFCCBC,stroke:#E64A19,stroke-width:2px,color:#000
+    style EVENT_LAYER fill:#FFF9C4,stroke:#FBC02D,stroke-width:2px,color:#000
+    style PROCESSING_LAYER fill:#D1C4E9,stroke:#673AB7,stroke-width:2px,color:#000
+    style STORAGE_LAYER fill:#B2DFDB,stroke:#00897B,stroke-width:2px,color:#000
+    style API_LAYER fill:#BBDEFB,stroke:#1976D2,stroke-width:2px,color:#000
 
     style GMB fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
     style POS fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
     style ERP fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
-    style FRAN fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
-
-    style GMB_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-    style POS_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-    style ERP_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-    style FRAN_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-    style WH_CONN fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-    style CUSTOM fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
-
-    style INGEST fill:#ffffff,stroke:#F57C00,stroke-width:2px,color:#000
+    style CONNECTORS fill:#ffffff,stroke:#388E3C,stroke-width:2px,color:#000
+    style SCHEDULER fill:#ffffff,stroke:#E64A19,stroke-width:2px,color:#000
+    style KAFKA_PROD fill:#ffffff,stroke:#FBC02D,stroke-width:2px,color:#000
     style KAFKA fill:#ffffff,stroke:#000,stroke-width:2px,color:#000
-
-    style DETECT fill:#ffffff,stroke:#7B1FA2,stroke-width:2px,color:#000
-    style RESOLVE fill:#ffffff,stroke:#7B1FA2,stroke-width:2px,color:#000
-
-    style ACCEPT fill:#ffffff,stroke:#4CAF50,stroke-width:3px,color:#000
-    style REVERT fill:#ffffff,stroke:#FF9800,stroke-width:3px,color:#000
-    style REVIEW fill:#ffffff,stroke:#F44336,stroke-width:3px,color:#000
-
-    style UBERALL fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
-    style DB fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
-    style NOTIFY fill:#ffffff,stroke:#00796B,stroke-width:2px,color:#000
-
-    style REDIS fill:#ffffff,stroke:#C62828,stroke-width:2px,color:#000
-    style API fill:#ffffff,stroke:#455A64,stroke-width:2px,color:#000
+    style CONSUMER fill:#ffffff,stroke:#673AB7,stroke-width:2px,color:#000
+    style DETECTOR fill:#ffffff,stroke:#673AB7,stroke-width:2px,color:#000
+    style ENGINE fill:#ffffff,stroke:#673AB7,stroke-width:2px,color:#000
+    style REDIS fill:#ffffff,stroke:#00897B,stroke-width:2px,color:#000
+    style POSTGRES fill:#ffffff,stroke:#00897B,stroke-width:2px,color:#000
+    style REST fill:#ffffff,stroke:#1976D2,stroke-width:2px,color:#000
+    style UBERALL fill:#ffffff,stroke:#F57C00,stroke-width:2px,color:#000
+    style NOTIFY fill:#ffffff,stroke:#F57C00,stroke-width:2px,color:#000
+    style CLIENTS fill:#ffffff,stroke:#F57C00,stroke-width:2px,color:#000
+    style STACK fill:#ffffff,stroke:#7B1FA2,stroke-width:2px,color:#000
 ```
 
 <p align="center">
