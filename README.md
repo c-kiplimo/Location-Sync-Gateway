@@ -22,6 +22,9 @@ Detects and resolves location data conflicts between external sources (Google My
 **Core Capabilities**
 - Multi-source data ingestion via pluggable connectors (Google, POS, ERP, Franchise APIs)
 - Field-level conflict detection comparing external sources against Uberall as system of record
+- **⭐ AI-powered data quality validation** - Scores every external snapshot (0-100), detects anomalies, prevents bad data
+- **⭐ Intelligent conflict resolution** - ML model learns from historical patterns, predicts best outcome
+- **⭐ Natural language explanations** - LLM-generated summaries explain decisions in plain language
 - Configurable priority-based resolution engine (YAML rules, version-controlled)
 - Automated execution with Uberall API integration for corrections
 - Event-driven architecture with Kafka for async processing
@@ -182,7 +185,105 @@ graph TB
 - Every Uberall API call → Request/response logged
 - Idempotency keys prevent duplicate updates
 
+---
+
+## ⭐ New: AI-Powered Quality & Intelligence Layer
+
+### Quality Validation
+Every external snapshot is scored (0-100) before conflict resolution:
+
+```kotlin
+data class QualityScore(
+    overallScore: Int,              // 0-100
+    breakdown: {
+        coordinates: 20,            // Missing/invalid coords
+        address: 20,                // Incomplete address
+        openingHours: 20,           // Invalid hours
+        keywords: 20,               // Missing keywords
+        consistency: 20             // Degradation detected
+    },
+    issues: [...],                  // MISSING_COORDINATES, etc.
+    severity: CRITICAL | HIGH | MEDIUM | LOW
+)
+```
+
+**Quality-Aware Resolution:**
+- **Critical quality (< 40)** → AUTO_REVERT (reject bad data)
+- **Quality degradation (> 20 point drop)** → FLAG_FOR_REVIEW
+- **High severity** → Increase confidence threshold to 0.95
+
+### AI Features
+
+**1. Anomaly Detection** (Isolation Forest)
+- Detects suspicious coordinate moves (> 100km)
+- Catches gradual quality degradation
+- Identifies bulk edit patterns
+
+**2. Resolution Prediction** (XGBoost)
+- Learns from historical decisions
+- Predicts AUTO_ACCEPT vs AUTO_REVERT vs FLAG_FOR_REVIEW
+- Adapts to franchisee behavior over time
+
+**3. Natural Language Explanations** (GPT-4/Claude)
+```
+"The franchisee in Mombasa extended their opening hours from 9am-6pm
+to 8am-8pm. This change looks legitimate because:
+
+1. The data quality is high (92/100) with no red flags
+2. This franchisee has made 15 similar changes in the past year,
+   and 14 were correct
+3. Local market hours in Mombasa typically run 8am-8pm
+
+Recommendation: Accept this change and update Uberall to match."
+```
+
+**Documentation:**
+- [Quality Integration Details](docs/04-quality-integration.md)
+- [AI Strategy & Implementation](docs/05-ai-integration-strategy.md)
+- [Uberall Challenge Integration](docs/UBERALL-CHALLENGE-INTEGRATION.md)
+
+---
+
 ## Quick Start
+
+### 🚀 Fastest Way to Run (Development)
+
+**No Docker Required!** Run with in-memory database for quick testing:
+
+```bash
+# Clone repository
+git clone https://github.com/c-kiplimo/Location-Sync-Gateway.git
+cd Location-Sync-Gateway
+
+# Build project
+./gradlew clean build -x test
+
+# Run with development profile (H2 in-memory database)
+MICRONAUT_ENVIRONMENTS=dev ./gradlew run
+
+# On Windows
+set MICRONAUT_ENVIRONMENTS=dev && gradlew run
+```
+
+Application starts at **http://localhost:8080**
+
+Access **Swagger UI** at http://localhost:8080/swagger-ui
+
+#### Test Simulation Endpoints
+
+```bash
+# Generate 100 simulated location snapshots
+curl -X POST "http://localhost:8080/api/v1/simulation/generate?count=100"
+
+# Generate conflict scenarios
+curl -X POST "http://localhost:8080/api/v1/simulation/generate-conflicts?count=50"
+
+# Generate temporary closure snapshots
+curl -X POST "http://localhost:8080/api/v1/simulation/generate-closures?count=20"
+
+# Stress test with high volume
+curl -X POST "http://localhost:8080/api/v1/simulation/stress-test?count=1000"
+```
 
 ### Current Implementation Status
 
@@ -210,6 +311,8 @@ graph TB
 
 ### Run Locally
 
+#### Option 1: Standalone (Development)
+
 ```bash
 # Clone repository
 git clone https://github.com/c-kiplimo/Location-Sync-Gateway.git
@@ -223,6 +326,59 @@ gradlew.bat run
 ```
 
 **Server starts at `http://localhost:8080`**
+
+#### Option 2: Docker Compose (Full Stack)
+
+```bash
+# Start all services (PostgreSQL, Kafka, Redis, Prometheus, Grafana)
+make dev-up
+
+# Or directly
+docker-compose up -d
+
+# Run database migrations
+make db-migrate
+
+# Create Kafka topics
+make kafka-create-topics
+
+# Run the application
+./gradlew run
+
+# Access services:
+# - Application: http://localhost:8080
+# - Kafka UI: http://localhost:8081
+# - Grafana: http://localhost:3000
+# - Prometheus: http://localhost:9090
+# - Jaeger: http://localhost:16686
+```
+
+#### Option 3: Kubernetes (Production-Ready)
+
+For container orchestration, scaling, and production deployment:
+
+```bash
+# Quick start with Minikube
+minikube start --cpus=4 --memory=8192
+minikube addons enable ingress metrics-server
+
+# Deploy to Kubernetes
+kubectl apply -f k8s/
+
+# Or use Kustomize
+kubectl apply -k k8s/
+
+# Access the application
+kubectl port-forward -n location-sync-gateway svc/location-sync-gateway 8080:80
+```
+
+**See [k8s/README.md](k8s/README.md) for comprehensive Kubernetes deployment guide including:**
+- Production-ready manifests (Deployment, StatefulSets, Services, Ingress)
+- Auto-scaling with HPA (3-12 replicas based on CPU/memory/Kafka lag)
+- High availability with pod anti-affinity and disruption budgets
+- Security with RBAC, Network Policies, and pod security contexts
+- Monitoring with Prometheus and Grafana
+- AWS EKS deployment architecture
 
 ### Test the API
 
@@ -750,6 +906,159 @@ Auto-applied via Flyway on startup. Files in `src/main/resources/db/migration/`
 
 ---
 
+### Phase 5: AI & Intelligence Layer ⏳ (PLANNED)
+
+**Goal:** Add AI-powered quality validation, anomaly detection, and intelligent resolution prediction.
+
+**Prerequisites:**
+- Phase 2 complete (need historical conflict/decision data in PostgreSQL)
+- Minimum 3-6 months of production data for ML training
+- External AI API access (OpenAI/Anthropic for LLM features)
+
+**Implementation Steps:**
+
+#### Data Quality Scoring Engine
+1. Design QualityScore model with breakdown by field category (coordinates, address, hours, etc.)
+2. Implement rule-based quality validators for each field type:
+   - CoordinatesValidator: Check for missing/invalid lat/lng, detect implausible locations
+   - AddressValidator: Validate completeness (street, city, postal code), format consistency
+   - OpeningHoursValidator: Check for invalid time ranges, impossible schedules
+   - KeywordsValidator: Detect missing required fields (name, category)
+3. Implement ConsistencyValidator to compare current snapshot against historical baseline
+4. Create QualityScorer service to aggregate individual field scores (weighted average)
+5. Define severity levels (CRITICAL < 40, HIGH < 60, MEDIUM < 80, LOW >= 80)
+6. Integrate quality scoring into ConflictDetector pipeline (score before resolution)
+7. Add quality-based rejection rules:
+   - CRITICAL quality → AUTO_REVERT (reject bad data)
+   - Quality degradation > 20 points → FLAG_FOR_REVIEW
+   - HIGH severity → Increase confidence threshold to 0.95
+8. Add quality score to Conflict model and database schema
+9. Create quality trends API endpoint for monitoring degradation over time
+10. Write unit tests for each validator with edge cases
+
+#### Anomaly Detection (Isolation Forest)
+11. Add scikit-learn or similar ML library for anomaly detection
+12. Design feature engineering pipeline to extract numerical features from snapshots:
+    - Coordinate distance from baseline (haversine formula)
+    - Quality score delta from moving average
+    - Number of fields changed in single snapshot
+    - Time since last change for each field
+13. Implement HistoricalDataExtractor to query PostgreSQL for training data
+14. Implement AnomalyDetector service using Isolation Forest algorithm
+15. Train initial model on historical snapshots (mark known good vs problematic)
+16. Configure anomaly score threshold (e.g., > 0.7 = anomalous)
+17. Integrate anomaly detection into quality scoring pipeline
+18. Add anomaly flags to QualityScore model (SUSPICIOUS_COORDINATE_MOVE, BULK_EDIT_PATTERN)
+19. Implement model retraining scheduler (weekly or monthly)
+20. Create model versioning and A/B testing framework
+21. Add anomaly detection metrics to Prometheus (anomalies_detected_total)
+22. Write integration tests with known anomalous patterns
+
+#### Resolution Prediction (ML Model)
+23. Design ML feature set for resolution prediction:
+    - Field type, source, location pattern
+    - Quality score, anomaly score
+    - Historical decision patterns for this location/franchisee
+    - Confidence score from conflict detector
+    - Time-based features (day of week, hour, seasonality)
+24. Implement FeatureExtractor to transform Conflict into ML feature vector
+25. Extract labeled training data from decisions table (outcome as label)
+26. Train XGBoost classifier to predict AUTO_ACCEPT vs AUTO_REVERT vs FLAG_FOR_REVIEW
+27. Evaluate model performance (precision/recall for each class, confusion matrix)
+28. Implement ResolutionPredictor service to invoke trained model
+29. Add ML prediction as input to ResolutionEngine (suggest outcome before rules)
+30. Implement confidence scoring for ML predictions
+31. Add fallback logic: if ML confidence < 0.8, use rule-based resolution
+32. Create A/B testing framework to compare ML vs rule-based outcomes
+33. Implement model monitoring for prediction drift detection
+34. Add prediction explanation features (SHAP values for interpretability)
+35. Create model retraining pipeline triggered by performance degradation
+36. Store ML prediction alongside rule-based decision for comparison
+37. Add ML metrics to dashboard (prediction accuracy, confidence distribution)
+
+#### Natural Language Explanations (LLM Integration)
+38. Add OpenAI or Anthropic SDK dependencies to project
+39. Configure API keys and rate limits in application.yml
+40. Design LLM prompt templates for conflict explanation:
+    - Conflict context (field, old value, new value, source)
+    - Quality score and issues
+    - Historical pattern analysis
+    - Resolution recommendation with reasoning
+41. Implement ExplanationGenerator service with LLM client
+42. Create structured prompt with conflict details, quality score, ML prediction
+43. Parse LLM response into structured format (summary, reasoning points, recommendation)
+44. Add caching layer (Redis) for repeated similar conflicts
+45. Implement rate limiting to stay within LLM API quotas
+46. Add explanation generation for FLAG_FOR_REVIEW conflicts (notify ops team with context)
+47. Create optional explanation endpoint for manual conflict review
+48. Implement fallback template-based explanations when LLM unavailable
+49. Add LLM response time metrics to Prometheus
+50. Write tests with mocked LLM responses
+
+#### Integration & Workflow
+51. Update ConflictDetector to include quality scoring step
+52. Update ResolutionEngine to consider:
+    - Quality score (reject if critical)
+    - Anomaly detection (flag if suspicious)
+    - ML prediction (suggest outcome)
+    - Rule-based resolution (final decision)
+53. Add decision confidence aggregation (combine rule + ML + quality signals)
+54. Implement "confidence cascade" logic:
+    - If quality CRITICAL → AUTO_REVERT (skip ML/rules)
+    - Else if anomaly detected → FLAG_FOR_REVIEW
+    - Else if ML confidence > 0.9 → Use ML prediction
+    - Else → Use rule-based resolution
+55. Add LLM explanations to FLAG_FOR_REVIEW notifications
+56. Create AI insights dashboard showing:
+    - Quality score trends over time
+    - Anomaly detection hit rate
+    - ML prediction accuracy vs rule-based
+    - LLM explanation samples
+57. Implement feature flags to enable/disable each AI component independently
+58. Add AI component health checks to observability
+59. Create AI configuration management (model versions, thresholds, prompt templates)
+60. Document AI decision-making process in audit logs
+
+#### Model Operations (MLOps)
+61. Set up model registry (MLflow or similar) for version control
+62. Implement model deployment pipeline (train → validate → deploy)
+63. Create model performance monitoring dashboard
+64. Set up automated retraining triggers based on:
+    - Performance degradation (accuracy drops below threshold)
+    - Data drift detection (input distribution changes)
+    - Time-based schedule (monthly retraining)
+65. Implement model rollback capability if new version underperforms
+66. Add model explainability reports for compliance
+67. Create model testing suite with validation datasets
+68. Document model architectures and hyperparameters
+
+**Success Criteria:**
+- Quality scoring blocks bad data before it enters resolution pipeline
+- Anomaly detection catches suspicious coordinate moves and bulk edits
+- ML model achieves > 85% accuracy on held-out test set
+- ML predictions align with rule-based decisions 90%+ of cases (validate rules)
+- LLM generates coherent explanations that ops team finds useful
+- Quality score trends show improvement over time (external sources send better data)
+- AI components degrade gracefully when unavailable (fallback to rules)
+- Model retraining pipeline runs automatically without manual intervention
+- AI insights dashboard helps identify patterns human rules missed
+- Full audit trail includes AI scores, predictions, and explanations
+
+**Cost Considerations:**
+- LLM API costs: Estimate $0.01-0.05 per conflict explanation
+- ML infrastructure: Training compute (GPU/TPU) vs inference (CPU)
+- Consider running LLM only for FLAG_FOR_REVIEW cases (10-20% of conflicts)
+- Implement aggressive caching for repeated patterns
+- Monitor API usage and set budget alerts
+
+**Data Requirements:**
+- Minimum 10,000 historical conflicts for ML training (preferably 50,000+)
+- Balanced dataset across outcomes (AUTO_ACCEPT, AUTO_REVERT, FLAG_FOR_REVIEW)
+- Minimum 6 months of temporal coverage for seasonality patterns
+- Representative data across all location types and sources
+
+---
+
 ## Project Structure
 
 ```
@@ -780,7 +1089,14 @@ src/main/kotlin/com/locationsync/gateway/
 │   ├── ResolutionEngine.kt           # Resolution rules engine
 │   ├── UberallApiExecutor.kt         # Uberall API client
 │   ├── NotificationEngine.kt         # Slack/Email alerts
-│   └── IdempotencyService.kt         # Duplicate prevention
+│   ├── IdempotencyService.kt         # Duplicate prevention
+│   └── ai/                           # AI & ML services (Phase 5)
+│       ├── QualityScorer.kt          # Data quality validation
+│       ├── AnomalyDetector.kt        # Isolation Forest anomaly detection
+│       ├── ResolutionPredictor.kt    # XGBoost resolution prediction
+│       ├── ExplanationGenerator.kt   # LLM-powered explanations
+│       ├── FeatureExtractor.kt       # ML feature engineering
+│       └── ModelRegistry.kt          # MLOps model versioning
 ├── repository/
 │   ├── ConflictRepository.kt         # PostgreSQL DAO
 │   ├── DecisionRepository.kt
@@ -871,6 +1187,62 @@ curl http://localhost:8080/api/v1/health
   ]
 }
 ```
+
+## 📚 Testing & Documentation
+
+### Complete Testing Guide
+
+See **[docs/guides/e2e-testing.md](docs/guides/e2e-testing.md)** for comprehensive end-to-end testing procedures including:
+- ✅ Health checks for all services
+- ✅ Individual service testing (Python AI + Kotlin Gateway)
+- ✅ Integration testing (service-to-service communication)
+- ✅ End-to-end workflow testing
+- ✅ Monitoring verification (Prometheus, Grafana)
+- ✅ Expected results for every test
+- ✅ Troubleshooting guide
+
+### Quick Test Commands
+
+See **[docs/guides/QUICK_TEST_COMMANDS.md](docs/guides/QUICK_TEST_COMMANDS.md)** for copy-paste commands:
+- Health check one-liners
+- AI service endpoint tests
+- Gateway simulation tests
+- Monitoring queries
+- Debugging commands
+
+### Architecture Documentation
+
+| Document | Description |
+|----------|-------------|
+| [MICROSERVICES_ARCHITECTURE.md](docs/MICROSERVICES_ARCHITECTURE.md) | Detailed microservices design |
+| [MICROSERVICES_IMPLEMENTATION.md](MICROSERVICES_IMPLEMENTATION.md) | Implementation guide with code examples |
+| [MICROSERVICES_COMPLETE.md](../MICROSERVICES_COMPLETE.md) | Project completion summary |
+| [SOLUTION_ARCHITECTURE.md](docs/SOLUTION_ARCHITECTURE.md) | Overall solution architecture |
+| [SETUP.md](docs/guides/SETUP.md) | Detailed setup instructions |
+| [PROJECT_STATUS.md](PROJECT_STATUS.md) | Current project status |
+
+### Project Review Procedure
+
+**For recruiters, portfolio reviews, or demonstrations:**
+
+1. **Read the overview** - [MICROSERVICES_COMPLETE.md](../MICROSERVICES_COMPLETE.md) (5 minutes)
+2. **Review architecture** - [MICROSERVICES_ARCHITECTURE.md](docs/MICROSERVICES_ARCHITECTURE.md) (10 minutes)
+3. **Start the system** - Follow [docs/guides/e2e-testing.md](docs/guides/e2e-testing.md) Phase 0 (5 minutes)
+4. **Test the system** - Run tests from [docs/guides/QUICK_TEST_COMMANDS.md](docs/guides/QUICK_TEST_COMMANDS.md) (10 minutes)
+5. **View the code** - Explore key files mentioned in documentation (20 minutes)
+6. **Check monitoring** - Access Prometheus and Grafana dashboards (5 minutes)
+
+**Total review time: ~1 hour for comprehensive understanding**
+
+### API Documentation
+
+**Python AI Service (Port 8081):**
+- Interactive Swagger: http://localhost:8081/docs
+- Endpoints: Quality Scoring, Anomaly Detection, Resolution Prediction
+
+**Kotlin Gateway (Port 8080):**
+- Interactive Swagger: http://localhost:8080/swagger-ui
+- Endpoints: Data Simulation, Conflict Detection, Health Checks
 
 ## Contributing
 
