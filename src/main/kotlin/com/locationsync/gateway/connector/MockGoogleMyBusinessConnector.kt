@@ -21,6 +21,12 @@ class MockGoogleMyBusinessConnector : LocationConnector {
 
     override fun connectorType() = "GOOGLE_MY_BUSINESS"
 
+    companion object {
+        private const val DEFAULT_PHONE = "+254712345678"
+        private const val DEFAULT_HOURS = "Mon-Fri: 09:00-18:00"
+        private const val DEFAULT_WEBSITE = "https://example.com"
+    }
+
     override suspend fun pullSnapshots(locationIds: List<Long>): List<LocationSnapshot> {
         logger.info("MockGoogleMyBusinessConnector pulling snapshots for ${locationIds.size} locations")
 
@@ -31,8 +37,8 @@ class MockGoogleMyBusinessConnector : LocationConnector {
                     source = connectorType(),
                     fields = mapOf(
                         "PHONE" to "+254799999999",  // Different from Uberall
-                        "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                        "WEBSITE" to "https://example.com"
+                        "OPENING_HOURS" to DEFAULT_HOURS,
+                        "WEBSITE" to DEFAULT_WEBSITE
                     ),
                     capturedAt = Instant.now()
                 )
@@ -41,9 +47,9 @@ class MockGoogleMyBusinessConnector : LocationConnector {
                     locationId = locationId,
                     source = connectorType(),
                     fields = mapOf(
-                        "PHONE" to "+254712345678",
+                        "PHONE" to DEFAULT_PHONE,
                         "OPENING_HOURS" to "Mon-Fri: 08:00-20:00",  // Different from Uberall
-                        "WEBSITE" to "https://example.com"
+                        "WEBSITE" to DEFAULT_WEBSITE
                     ),
                     capturedAt = Instant.now()
                 )
@@ -52,9 +58,9 @@ class MockGoogleMyBusinessConnector : LocationConnector {
                     locationId = locationId,
                     source = connectorType(),
                     fields = mapOf(
-                        "PHONE" to "+254712345678",
-                        "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                        "WEBSITE" to "https://example.com",
+                        "PHONE" to DEFAULT_PHONE,
+                        "OPENING_HOURS" to DEFAULT_HOURS,
+                        "WEBSITE" to DEFAULT_WEBSITE,
                         "CATEGORIES" to "Coffee Shop"  // Different from Uberall
                     ),
                     capturedAt = Instant.now()
@@ -64,9 +70,9 @@ class MockGoogleMyBusinessConnector : LocationConnector {
                     locationId = locationId,
                     source = connectorType(),
                     fields = mapOf(
-                        "PHONE" to "+254712345678",
-                        "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                        "WEBSITE" to "https://example.com"
+                        "PHONE" to DEFAULT_PHONE,
+                        "OPENING_HOURS" to DEFAULT_HOURS,
+                        "WEBSITE" to DEFAULT_WEBSITE
                     ),
                     capturedAt = Instant.now()
                 )
