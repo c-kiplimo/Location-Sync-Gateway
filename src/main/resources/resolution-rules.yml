@@ -1,0 +1,274 @@
+# Resolution Rules Configuration
+# Version-controlled conflict resolution rules for Location Sync Gateway
+# Rules are evaluated in priority order (higher priority = evaluated first)
+
+rules:
+  # === PHONE NUMBER RULES ===
+
+  - name: google-phone-hq-override
+    description: Phone numbers are centrally managed by HQ, reject external changes
+    fieldType: PHONE
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null  # Applies to all locations
+    defaultOutcome: AUTO_REVERT
+    minimumConfidence: 1.0
+    priority: 200
+    enabled: true
+    reason: "Phone numbers are centrally managed by head office"
+    conditions: []
+
+  # === OPENING HOURS RULES ===
+
+  - name: google-opening-hours-franchisee
+    description: Franchisees can set local opening hours within reasonable bounds
+    fieldType: OPENING_HOURS
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: "franchise.*"
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.9
+    priority: 100
+    enabled: true
+    reason: "Franchisees are allowed to adjust hours based on local market demand"
+    conditions:
+      - type: VALUE_WITHIN_RANGE
+        field: openingHourSpan
+        min: 6   # Minimum 6 hours per day
+        max: 16  # Maximum 16 hours per day
+
+  - name: google-opening-hours-corporate
+    description: Corporate locations use standard hours
+    fieldType: OPENING_HOURS
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: "corporate.*"
+    defaultOutcome: AUTO_REVERT
+    minimumConfidence: 1.0
+    priority: 150
+    enabled: true
+    reason: "Corporate locations must follow standardized hours"
+    conditions: []
+
+  - name: pos-hours-emergency-closure
+    description: POS signals potential emergency closure
+    fieldType: OPENING_HOURS
+    source: POS_SYSTEM
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.7
+    priority: 150
+    enabled: true
+    reason: "POS system detected unusual closure pattern"
+    conditions:
+      - type: PATTERN_MATCH
+        pattern: "zero_transactions_3_days"
+    notifyChannel: slack
+    notifyTarget: "#location-ops-alerts"
+
+  # === CATEGORIES RULES ===
+
+  - name: google-category-brand-standard
+    description: Brand categories are non-negotiable
+    fieldType: CATEGORIES
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_REVERT
+    minimumConfidence: 1.0
+    priority: 200
+    enabled: true
+    reason: "Business categories must match brand standards for consistency"
+    conditions: []
+
+  # === COORDINATES RULES ===
+
+  - name: google-coordinates-minor-change
+    description: Accept minor coordinate corrections (< 100m)
+    fieldType: COORDINATES
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.95
+    priority: 100
+    enabled: true
+    reason: "Minor coordinate adjustment likely due to improved mapping data"
+    conditions:
+      - type: CHANGE_MAGNITUDE
+        field: coordinates
+        maxDistanceKm: 0.1
+
+  - name: google-coordinates-major-change
+    description: Flag major coordinate changes for review
+    fieldType: COORDINATES
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.8
+    priority: 50
+    enabled: true
+    reason: "Significant coordinate change requires verification"
+    conditions:
+      - type: CHANGE_MAGNITUDE
+        field: coordinates
+        minDistanceKm: 0.1
+        maxDistanceKm: 10
+    notifyChannel: slack
+    notifyTarget: "#location-ops-alerts"
+
+  - name: google-coordinates-relocation
+    description: Extreme coordinate changes indicate relocation
+    fieldType: COORDINATES
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.9
+    priority: 25
+    enabled: true
+    reason: "Possible location relocation detected"
+    conditions:
+      - type: CHANGE_MAGNITUDE
+        field: coordinates
+        minDistanceKm: 10
+    notifyChannel: slack
+    notifyTarget: "#location-ops-critical"
+
+  # === ADDRESS RULES ===
+
+  - name: google-address-update
+    description: Accept address updates if quality is high
+    fieldType: ADDRESS
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.9
+    priority: 100
+    enabled: true
+    reason: "Address correction from Google Maps data"
+    conditions:
+      - type: QUALITY_THRESHOLD
+        field: address
+        minScore: 80
+
+  - name: google-address-low-quality
+    description: Reject low-quality address changes
+    fieldType: ADDRESS
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_REVERT
+    minimumConfidence: 0.8
+    priority: 150
+    enabled: true
+    reason: "Address change has low data quality"
+    conditions:
+      - type: QUALITY_THRESHOLD
+        field: address
+        maxScore: 60
+
+  # === TEMPORARY CLOSURE RULES ===
+
+  - name: pos-temporary-closure
+    description: POS signals potential closure, needs confirmation
+    fieldType: TEMPORARY_CLOSURE
+    source: POS_SYSTEM
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.85
+    priority: 150
+    enabled: true
+    reason: "POS system detected no transactions for extended period"
+    conditions: []
+    notifyChannel: slack
+    notifyTarget: "#location-ops-alerts"
+
+  - name: erp-planned-closure
+    description: ERP work orders are authoritative for planned closures
+    fieldType: TEMPORARY_CLOSURE
+    source: ERP_SYSTEM
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 1.0
+    priority: 250
+    enabled: true
+    reason: "ERP work order confirmed planned closure/renovation"
+    conditions: []
+
+  # === WEBSITE RULES ===
+
+  - name: google-website-update
+    description: Accept website URL updates
+    fieldType: WEBSITE
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.95
+    priority: 100
+    enabled: true
+    reason: "Website URL updated in Google Business Profile"
+    conditions:
+      - type: FORMAT_VALIDATION
+        field: website
+        regex: "^https?://.+"
+
+  # === DESCRIPTION RULES ===
+
+  - name: google-description-update
+    description: Accept description updates if not spam
+    fieldType: DESCRIPTION
+    source: GOOGLE_MY_BUSINESS
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.85
+    priority: 75
+    enabled: true
+    reason: "Business description updated"
+    conditions:
+      - type: SPAM_CHECK
+        field: description
+        maxSpamScore: 0.3
+
+  # === FALLBACK RULES ===
+
+  - name: default-high-confidence-accept
+    description: Default rule for high-confidence conflicts
+    fieldType: null  # Applies to all field types
+    source: null     # Applies to all sources
+    locationPattern: null
+    defaultOutcome: AUTO_ACCEPT
+    minimumConfidence: 0.95
+    priority: 10
+    enabled: true
+    reason: "High confidence external data"
+    conditions: []
+
+  - name: default-low-confidence-review
+    description: Default rule for low-confidence conflicts
+    fieldType: null
+    source: null
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.5
+    priority: 5
+    enabled: true
+    reason: "Low confidence requires manual review"
+    conditions: []
+    notifyChannel: slack
+    notifyTarget: "#location-ops-alerts"
+
+  - name: default-catch-all
+    description: Catch-all rule for edge cases
+    fieldType: null
+    source: null
+    locationPattern: null
+    defaultOutcome: FLAG_FOR_REVIEW
+    minimumConfidence: 0.0
+    priority: 1
+    enabled: true
+    reason: "No specific rule matched, requires review"
+    conditions: []
+    notifyChannel: slack
+    notifyTarget: "#location-ops-alerts"
+
+# Condition Types Reference:
+# - VALUE_WITHIN_RANGE: Numeric value between min/max
+# - CHANGE_MAGNITUDE: Change size (coordinates: distance in km)
+# - PATTERN_MATCH: Match specific pattern
+# - QUALITY_THRESHOLD: Quality score above/below threshold
+# - FORMAT_VALIDATION: Regex validation
+# - SPAM_CHECK: Spam/abuse detection

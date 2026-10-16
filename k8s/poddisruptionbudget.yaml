@@ -1,0 +1,74 @@
+# PodDisruptionBudget for Location Sync Gateway
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: location-sync-gateway-pdb
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+spec:
+  minAvailable: 2  # Ensure at least 2 pods are always running
+  selector:
+    matchLabels:
+      app: location-sync-gateway
+
+---
+# PodDisruptionBudget for Kafka
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kafka-pdb
+  namespace: location-sync-gateway
+  labels:
+    app: kafka
+spec:
+  minAvailable: 2  # Ensure quorum is maintained
+  selector:
+    matchLabels:
+      app: kafka
+
+---
+# PodDisruptionBudget for ZooKeeper
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zookeeper-pdb
+  namespace: location-sync-gateway
+  labels:
+    app: zookeeper
+spec:
+  minAvailable: 2  # Ensure quorum is maintained
+  selector:
+    matchLabels:
+      app: zookeeper
+
+---
+# PodDisruptionBudget for Redis Sentinel
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-sentinel-pdb
+  namespace: location-sync-gateway
+  labels:
+    app: redis-sentinel
+spec:
+  minAvailable: 2  # Ensure quorum is maintained
+  selector:
+    matchLabels:
+      app: redis-sentinel
+
+---
+# Note: PodDisruptionBudgets ensure that during voluntary disruptions
+# (like node drains, rolling updates, or cluster upgrades), a minimum
+# number of pods remain available to maintain service continuity.
+#
+# They do NOT protect against:
+# - Involuntary disruptions (hardware failures, kernel panics)
+# - Pod evictions due to resource pressure
+# - Manual pod deletions with --force flag
+#
+# Best practices:
+# 1. Use minAvailable for stateful services (Kafka, ZooKeeper)
+# 2. Use maxUnavailable for stateless services (application pods)
+# 3. Ensure minAvailable < total replicas to allow updates
+# 4. Combine with pod anti-affinity for better availability

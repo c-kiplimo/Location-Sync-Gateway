@@ -1,0 +1,320 @@
+# ServiceMonitor for Location Sync Gateway application
+# Requires Prometheus Operator to be installed
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: location-sync-gateway
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: location-sync-gateway
+  endpoints:
+  - port: http
+    path: /prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+    scheme: http
+
+---
+# ServiceMonitor for PostgreSQL
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-exporter
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# ServiceMonitor for Kafka JMX metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kafka-jmx-exporter
+  namespace: location-sync-gateway
+  labels:
+    app: kafka
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# ServiceMonitor for Redis
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-exporter
+  namespace: location-sync-gateway
+  labels:
+    app: redis
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: location-sync-gateway-alerts
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: location-sync-gateway.rules
+    interval: 30s
+    rules:
+    # Application availability
+    - alert: LocationSyncGatewayDown
+      expr: up{job="location-sync-gateway"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: application
+      annotations:
+        summary: "Location Sync Gateway is down"
+        description: "Location Sync Gateway has been down for more than 2 minutes"
+
+    # High error rate
+    - alert: HighErrorRate
+      expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+        component: application
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+    # High latency
+    - alert: HighLatency
+      expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+        component: application
+      annotations:
+        summary: "High latency detected"
+        description: "P99 latency is {{ $value }}s over the last 5 minutes"
+
+    # Kafka consumer lag
+    - alert: HighKafkaConsumerLag
+      expr: kafka_consumer_lag > 10000
+      for: 10m
+      labels:
+        severity: warning
+        component: kafka
+      annotations:
+        summary: "High Kafka consumer lag"
+        description: "Consumer lag is {{ $value }} messages on topic {{ $labels.topic }}"
+
+    # Database connection pool
+    - alert: DatabaseConnectionPoolExhausted
+      expr: hikaricp_connections_active / hikaricp_connections_max > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+      annotations:
+        summary: "Database connection pool near exhaustion"
+        description: "Connection pool is {{ $value | humanizePercentage }} full"
+
+    # Memory usage
+    - alert: HighMemoryUsage
+      expr: process_resident_memory_bytes / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        component: application
+      annotations:
+        summary: "High memory usage"
+        description: "Memory usage is {{ $value | humanizePercentage }}"
+
+    # Redis availability
+    - alert: RedisDown
+      expr: up{job="redis-exporter"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: redis
+      annotations:
+        summary: "Redis is down"
+        description: "Redis has been down for more than 2 minutes"
+
+    # PostgreSQL availability
+    - alert: PostgresDown
+      expr: up{job="postgres-exporter"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: postgres
+      annotations:
+        summary: "PostgreSQL is down"
+        description: "PostgreSQL has been down for more than 2 minutes"
+
+    # Kafka availability
+    - alert: KafkaDown
+      expr: up{job="kafka-jmx-exporter"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: kafka
+      annotations:
+        summary: "Kafka is down"
+        description: "Kafka has been down for more than 2 minutes"
+
+  - name: location-sync-gateway.business-rules
+    interval: 1m
+    rules:
+    # Conflict detection rate
+    - alert: LowConflictDetectionRate
+      expr: rate(conflicts_detected_total[1h]) < 1
+      for: 6h
+      labels:
+        severity: info
+        component: business
+      annotations:
+        summary: "Low conflict detection rate"
+        description: "Only {{ $value }} conflicts detected per second over the last hour"
+
+    # Auto-resolution success rate
+    - alert: LowAutoResolutionRate
+      expr: rate(conflicts_auto_resolved_total[1h]) / rate(conflicts_detected_total[1h]) < 0.5
+      for: 1h
+      labels:
+        severity: warning
+        component: business
+      annotations:
+        summary: "Low auto-resolution rate"
+        description: "Only {{ $value | humanizePercentage }} of conflicts are being auto-resolved"
+
+    # Quality score degradation
+    - alert: QualityScoreDegradation
+      expr: avg(quality_score) < 60
+      for: 30m
+      labels:
+        severity: warning
+        component: business
+      annotations:
+        summary: "Quality score degradation"
+        description: "Average quality score is {{ $value }} over the last 30 minutes"
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: location-sync-gateway-dashboard
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+    grafana_dashboard: "1"
+data:
+  location-sync-gateway-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Location Sync Gateway",
+        "uid": "location-sync-gateway",
+        "tags": ["location-sync", "kafka", "postgres"],
+        "timezone": "browser",
+        "schemaVersion": 16,
+        "panels": [
+          {
+            "title": "Request Rate",
+            "targets": [
+              {
+                "expr": "rate(http_server_requests_seconds_count[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Error Rate",
+            "targets": [
+              {
+                "expr": "rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Latency (P50, P95, P99)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, rate(http_server_requests_seconds_bucket[5m]))",
+                "legendFormat": "P50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m]))",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m]))",
+                "legendFormat": "P99"
+              }
+            ]
+          },
+          {
+            "title": "Kafka Consumer Lag",
+            "targets": [
+              {
+                "expr": "kafka_consumer_lag"
+              }
+            ]
+          },
+          {
+            "title": "Conflicts Detected",
+            "targets": [
+              {
+                "expr": "rate(conflicts_detected_total[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Quality Score Distribution",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, rate(quality_score_bucket[5m]))"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# Note: ServiceMonitor resources require Prometheus Operator
+# Install with:
+# kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml
+#
+# For AWS EKS, use Amazon Managed Service for Prometheus (AMP):
+# https://docs.aws.amazon.com/prometheus/latest/userguide/AMP-onboard-ingest-metrics.html

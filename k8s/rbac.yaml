@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: location-sync-gateway
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+  annotations:
+    # For AWS EKS with IRSA (IAM Roles for Service Accounts)
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/location-sync-gateway-pod-role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: location-sync-gateway
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+rules:
+# Allow reading ConfigMaps
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+
+# Allow reading Secrets
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+
+# Allow reading Pods (for health checks)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+# Allow reading Services (for service discovery)
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: location-sync-gateway
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: location-sync-gateway
+subjects:
+- kind: ServiceAccount
+  name: location-sync-gateway
+  namespace: location-sync-gateway

@@ -11,6 +11,18 @@ import jakarta.inject.Singleton
 @Singleton
 class MockUberallDataService {
 
+    companion object {
+        private const val DEFAULT_PHONE = "+254712345678"
+        private const val DEFAULT_HOURS = "Mon-Fri: 09:00-18:00"
+        private const val DEFAULT_WEBSITE = "https://example.com"
+
+        private val DEFAULT_FIELDS = mapOf(
+            "PHONE" to DEFAULT_PHONE,
+            "OPENING_HOURS" to DEFAULT_HOURS,
+            "WEBSITE" to DEFAULT_WEBSITE
+        )
+    }
+
     /**
      * Get mock Uberall data for a location.
      *
@@ -19,30 +31,13 @@ class MockUberallDataService {
      */
     fun getLocationData(locationId: Long): Map<String, String> {
         return when (locationId) {
-            1001L -> mapOf(
-                "PHONE" to "+254712345678",  // Different from Google
-                "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                "WEBSITE" to "https://example.com"
-            )
+            1001L -> DEFAULT_FIELDS  // Different phone from Google
 
-            1002L -> mapOf(
-                "PHONE" to "+254712345678",
-                "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",  // Different from Google
-                "WEBSITE" to "https://example.com"
-            )
+            1002L -> DEFAULT_FIELDS  // Different hours from Google
 
-            1003L -> mapOf(
-                "PHONE" to "+254712345678",
-                "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                "WEBSITE" to "https://example.com",
-                "CATEGORIES" to "Restaurant"  // Different from Google
-            )
+            1003L -> DEFAULT_FIELDS + ("CATEGORIES" to "Restaurant")  // Different category from Google
 
-            1004L -> mapOf(
-                "PHONE" to "+254712345678",
-                "OPENING_HOURS" to "Mon-Fri: 09:00-18:00",
-                "WEBSITE" to "https://example.com"
-            )
+            1004L -> DEFAULT_FIELDS  // Matches Google (no conflict)
 
             else -> emptyMap()
         }

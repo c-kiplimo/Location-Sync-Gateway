@@ -1,0 +1,60 @@
+# Development configuration - runs without Docker
+# Use this profile for local development: MICRONAUT_ENVIRONMENTS=dev ./gradlew run
+
+micronaut:
+  application:
+    name: location-sync-gateway
+  server:
+    port: 8080
+  tracing:
+    enabled: false
+
+# H2 in-memory database for development
+datasources:
+  default:
+    url: jdbc:h2:mem:location_sync_gateway;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+    dialect: H2
+    schema-generate: CREATE_DROP
+    maximum-pool-size: 10
+
+# Disable Flyway for dev (using schema-generate instead)
+flyway:
+  datasources:
+    default:
+      enabled: false
+
+# Embedded Kafka for development (Testcontainers)
+kafka:
+  embedded:
+    enabled: false  # Set to true if you want embedded Kafka
+  bootstrap:
+    servers: localhost:9092
+
+# Disable Redis for development
+redis:
+  enabled: false
+
+# Disable external integrations for development
+scheduler:
+  ingestion:
+    enabled: false
+
+
+# AI/ML - Disable for development
+location-sync-gateway:
+  anomaly-detection:
+    enabled: false
+  ml-prediction:
+    enabled: false
+  llm-explanations:
+    enabled: false
+
+# Logging
+logger:
+  levels:
+    com.locationsync.gateway: DEBUG
+    io.micronaut.http: DEBUG
+    org.apache.kafka: WARN

@@ -4,6 +4,7 @@ import com.locationsync.gateway.model.Conflict
 import com.locationsync.gateway.model.LocationSnapshot
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import kotlin.collections.mutableListOf
 
 /**
  * Detects conflicts between external source data and Uberall data.
@@ -33,7 +34,6 @@ class ConflictDetector {
             if (externalValue == uberallValue) {
                 continue
             }
-
             // Conflict detected
             conflicts.add(
                 Conflict(

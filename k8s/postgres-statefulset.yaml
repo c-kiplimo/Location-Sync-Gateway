@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres-service
+  replicas: 1  # Single primary for development; use managed RDS in production
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9187"
+    spec:
+      securityContext:
+        fsGroup: 999  # postgres group
+        runAsUser: 999  # postgres user
+        runAsNonRoot: true
+
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: location-sync-gateway-config
+              key: db.name
+        - name: POSTGRES_USER
+          value: "lsg_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: db-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=en_US.UTF-8"
+
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        # Volume mounts
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: postgres-initdb
+          mountPath: /docker-entrypoint-initdb.d
+
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U lsg_user -d location_sync_gateway
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U lsg_user -d location_sync_gateway
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      # Optional: Postgres exporter for Prometheus metrics
+      - name: postgres-exporter
+        image: prometheuscommunity/postgres-exporter:v0.15.0
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: metrics
+          containerPort: 9187
+          protocol: TCP
+
+        env:
+        - name: DATA_SOURCE_NAME
+          value: "postgresql://lsg_user:$(POSTGRES_PASSWORD)@localhost:5432/location_sync_gateway?sslmode=disable"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: db-password
+
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+          optional: true
+      - name: postgres-initdb
+        configMap:
+          name: postgres-initdb
+          optional: true
+
+  # Volume claim templates for persistent storage
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+      labels:
+        app: postgres
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: gp3  # AWS EBS GP3 for production
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# PostgreSQL configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+data:
+  postgresql.conf: |
+    # Connection settings
+    max_connections = 200
+    shared_buffers = 256MB
+
+    # Performance tuning
+    effective_cache_size = 1GB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 2621kB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = '/var/log/postgresql'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    log_temp_files = 0
+
+    # Replication (for production with read replicas)
+    wal_level = replica
+    max_wal_senders = 3
+    max_replication_slots = 3
+    hot_standby = on
+
+---
+# Init scripts for database setup
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+data:
+  01-init-extensions.sql: |
+    -- Enable required extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON DATABASE location_sync_gateway TO lsg_user;
+
+---
+# Production note: Use Amazon RDS for PostgreSQL instead
+# This configuration is for development/testing only
+#
+# Production RDS configuration example:
+#
+# resource "aws_db_instance" "postgres" {
+#   identifier = "location-sync-gateway-postgres"
+#   engine = "postgres"
+#   engine_version = "15.4"
+#   instance_class = "db.r6g.xlarge"
+#   allocated_storage = 100
+#   storage_type = "gp3"
+#   storage_encrypted = true
+#
+#   db_name = "location_sync_gateway"
+#   username = "lsg_user"
+#   password = var.db_password
+#
+#   multi_az = true
+#   backup_retention_period = 7
+#   backup_window = "03:00-04:00"
+#   maintenance_window = "mon:04:00-mon:05:00"
+#
+#   performance_insights_enabled = true
+#   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+# }

@@ -1,0 +1,116 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace
+namespace: location-sync-gateway
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: location-sync-gateway
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to deploy
+resources:
+# Core namespace and RBAC
+- namespace.yaml
+- rbac.yaml
+
+# Application deployment
+- deployment.yaml
+- service.yaml
+- configmap.yaml
+- secret.yaml
+
+# Ingress
+- ingress.yaml
+
+# Autoscaling
+- hpa.yaml
+
+# Stateful services
+- postgres-statefulset.yaml
+- kafka-statefulset.yaml
+- redis-deployment.yaml
+
+# Network security
+- network-policy.yaml
+
+# High availability
+- poddisruptionbudget.yaml
+
+# Monitoring
+- servicemonitor.yaml
+
+# ConfigMap generator for dynamic configuration
+configMapGenerator:
+- name: location-sync-gateway-env
+  literals:
+  - ENVIRONMENT=production
+  - LOG_LEVEL=INFO
+  - KAFKA_CONSUMER_GROUP_ID=location-sync-gateway-consumer-group
+  - REDIS_TTL_SECONDS=300
+
+# Secret generator (in production, use external secret management)
+secretGenerator:
+- name: location-sync-gateway-generated-secrets
+  literals:
+  - jwt-secret=CHANGE_ME_IN_PRODUCTION
+
+# Image tags (override with kustomize edit set image)
+images:
+- name: location-sync-gateway
+  newName: your-registry/location-sync-gateway
+  newTag: latest
+
+# Patches for environment-specific overrides
+patchesStrategicMerge:
+- |-
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: location-sync-gateway
+    namespace: location-sync-gateway
+  spec:
+    template:
+      metadata:
+        annotations:
+          deployment-timestamp: "TIMESTAMP_PLACEHOLDER"
+
+# Replacements for dynamic values
+replacements:
+- source:
+    kind: ConfigMap
+    name: location-sync-gateway-config
+    fieldPath: data.db\.host
+  targets:
+  - select:
+      kind: Deployment
+      name: location-sync-gateway
+    fieldPaths:
+    - spec.template.spec.containers.[name=application].env.[name=DB_HOST].value
+
+---
+# Kustomization for different environments
+#
+# Directory structure:
+# k8s/
+# ├── base/              (this directory)
+# │   ├── kustomization.yaml
+# │   ├── deployment.yaml
+# │   └── ...
+# ├── overlays/
+# │   ├── development/
+# │   │   ├── kustomization.yaml
+# │   │   └── patches/
+# │   ├── staging/
+# │   │   ├── kustomization.yaml
+# │   │   └── patches/
+# │   └── production/
+# │       ├── kustomization.yaml
+# │       └── patches/
+#
+# Usage:
+# kubectl apply -k k8s/overlays/development
+# kubectl apply -k k8s/overlays/staging
+# kubectl apply -k k8s/overlays/production

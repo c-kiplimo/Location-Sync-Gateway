@@ -2,13 +2,176 @@ micronaut:
   application:
     name: location-sync-gateway
   server:
-    port: 8080
+    port: 9096
+    cors:
+      enabled: true
+
+  # Metrics and health
+  metrics:
+    enabled: true
+    export:
+      prometheus:
+        enabled: true
+        step: PT1M
+        descriptions: true
+
+  # Distributed tracing
+  tracing:
+    enabled: true
+    jaeger:
+      enabled: true
+      sampler:
+        probability: 0.1
+      sender:
+        agentHost: ${JAEGER_HOST:localhost}
+        agentPort: 6831
 
 netty:
   default:
     allocator:
       max-order: 3
 
+# Data source configuration
+datasources:
+  default:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:location_sync_gateway}
+    driverClassName: org.postgresql.Driver
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:smartcode}
+    dialect: POSTGRES
+    schema-generate: NONE  # Use Flyway for migrations
+    maximum-pool-size: 50
+    minimum-idle: 10
+    connection-timeout: 30000
+    idle-timeout: 600000
+    max-lifetime: 1800000
+
+# Flyway migrations
+flyway:
+  datasources:
+    default:
+      enabled: true
+      locations: classpath:db/migration
+      baseline-on-migrate: true
+      baseline-version: 0
+      validate-on-migrate: true
+
+# Kafka configuration
+kafka:
+  bootstrap:
+    servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+  producers:
+    default:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.micronaut.kafka.serdes.JsonSerializer
+      acks: all
+      retries: 3
+      max-in-flight-requests-per-connection: 5
+      enable-idempotence: true
+      compression-type: snappy
+      linger-ms: 10
+      batch-size: 16384
+
+  consumers:
+    default:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.micronaut.kafka.serdes.JsonDeserializer
+      group-id: location-sync-gateway-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 10000
+
+# Redis configuration
+redis:
+  uri: redis://:${REDIS_PASSWORD:redis_password}@${REDIS_HOST:localhost}:${REDIS_PORT:6379}
+  caches:
+    location-data:
+      expire-after-write: 5m
+      maximum-size: 10000
+    oauth-tokens:
+      expire-after-write: 55m
+      maximum-size: 100
+
+# External API configurations
+external-apis:
+  google:
+    oauth:
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+      client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+    api:
+      base-url: https://mybusinessbusinessinformation.googleapis.com
+      timeout: 30s
+
+  uberall:
+    api:
+      base-url: ${UBERALL_API_BASE_URL:https://uberall.com/api}
+      private-key: ${UBERALL_PRIVATE_KEY:}
+      timeout: 30s
+
+# AI/ML Configuration
+ai:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-4
+    max-tokens: 500
+
+  models:
+    anomaly-detector:
+      threshold: 0.7
+    resolution-predictor:
+      confidence-threshold: 0.9
+
+# Scheduler configuration
+scheduler:
+  ingestion:
+    enabled: ${SCHEDULER_ENABLED:true}
+    fixed-delay: 5m
+    initial-delay: 30s
+
+# Notifications
+notifications:
+  slack:
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+    channel: "#location-ops-alerts"
+    enabled: ${SLACK_ENABLED:false}
+
+# Logging
 logger:
   levels:
-    com.locationsync.gateway: DEBUG
+    com.locationsync.gateway: ${LOG_LEVEL:INFO}
+    io.micronaut.http: INFO
+    org.apache.kafka: WARN
+
+# Management endpoints
+endpoints:
+  all:
+    enabled: true
+    sensitive: false
+  health:
+    enabled: true
+    details-visible: AUTHENTICATED
+  prometheus:
+    enabled: true
+    sensitive: false
+
+# Disable Kafka health indicator
+kafka:
+  health:
+    enabled: false
+
+# Application-specific
+location-sync-gateway:
+  quality:
+    enabled: true
+    critical-threshold: 40
+  anomaly-detection:
+    enabled: ${ANOMALY_DETECTION_ENABLED:true}
+  ml-prediction:
+    enabled: ${ML_PREDICTION_ENABLED:false}
+  llm-explanations:
+    enabled: ${LLM_EXPLANATIONS_ENABLED:false}
