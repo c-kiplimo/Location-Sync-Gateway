@@ -1,0 +1,33 @@
+# ============================================================
+# NAMESPACE - Creates isolated environment for all resources
+# ============================================================
+#
+# PURPOSE:
+#   - Isolates Location Sync Platform resources from other applications
+#   - Enables resource quotas and access control (RBAC)
+#   - Makes cleanup easier (delete namespace = delete everything)
+#   - Prevents name conflicts with other deployments
+#
+# WHEN TO USE:
+#   - Always create this FIRST before any other resources
+#   - One namespace per environment (dev, staging, prod)
+#
+# HOW TO APPLY:
+#   kubectl apply -f namespace.yaml
+#   kubectl config set-context --current --namespace=location-sync
+#
+# HOW TO DELETE (WARNING: Deletes ALL resources):
+#   kubectl delete namespace location-sync
+#
+# ============================================================
+
+apiVersion: v1                    # Kubernetes API version for Namespace
+kind: Namespace                   # Resource type
+metadata:
+  name: location-sync             # Name of the namespace (use this in all kubectl commands)
+  labels:
+    # Labels for organization and filtering
+    name: location-sync           # Namespace identifier
+    environment: production       # Tag: dev, staging, or production
+    app: location-sync-platform   # Application identifier
+    managed-by: kubectl           # How this resource is managed

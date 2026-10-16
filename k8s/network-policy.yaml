@@ -1,0 +1,438 @@
+# Network Policy for Location Sync Gateway application
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: location-sync-gateway-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app: location-sync-gateway
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow traffic from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow traffic from within the namespace (service mesh)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+
+  # Allow Prometheus scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow connection to PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+
+  # Allow connection to Kafka
+  - to:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 9093
+
+  # Allow connection to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+  # Allow external HTTPS (for OAuth, external APIs)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Network Policy for PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow connections from application pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: location-sync-gateway
+    ports:
+    - protocol: TCP
+      port: 5432
+
+  # Allow Prometheus metrics scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9187
+
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow replication traffic between PostgreSQL instances
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Network Policy for Kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: kafka
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow connections from application pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: location-sync-gateway
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 9093
+
+  # Allow inter-broker communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 9093
+
+  # Allow ZooKeeper connections
+  - from:
+    - podSelector:
+        matchLabels:
+          app: zookeeper
+    ports:
+    - protocol: TCP
+      port: 9092
+
+  # Allow Prometheus JMX metrics scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9308
+
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow connection to ZooKeeper
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zookeeper
+    ports:
+    - protocol: TCP
+      port: 2181
+
+  # Allow inter-broker communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 9093
+
+---
+# Network Policy for ZooKeeper
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zookeeper-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: zookeeper
+spec:
+  podSelector:
+    matchLabels:
+      app: zookeeper
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow connections from Kafka
+  - from:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 2181
+
+  # Allow inter-ZooKeeper communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: zookeeper
+    ports:
+    - protocol: TCP
+      port: 2181
+    - protocol: TCP
+      port: 2888
+    - protocol: TCP
+      port: 3888
+
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow inter-ZooKeeper communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: zookeeper
+    ports:
+    - protocol: TCP
+      port: 2181
+    - protocol: TCP
+      port: 2888
+    - protocol: TCP
+      port: 3888
+
+---
+# Network Policy for Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: redis
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow connections from application pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: location-sync-gateway
+    ports:
+    - protocol: TCP
+      port: 6379
+
+  # Allow connections from Redis Sentinel
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis-sentinel
+    ports:
+    - protocol: TCP
+      port: 6379
+
+  # Allow Prometheus metrics scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9121
+
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Network Policy for Redis Sentinel
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-sentinel-netpol
+  namespace: location-sync-gateway
+  labels:
+    app: redis-sentinel
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-sentinel
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow connections from application pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: location-sync-gateway
+    ports:
+    - protocol: TCP
+      port: 26379
+
+  # Allow inter-sentinel communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis-sentinel
+    ports:
+    - protocol: TCP
+      port: 26379
+
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow connection to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+  # Allow inter-sentinel communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis-sentinel
+    ports:
+    - protocol: TCP
+      port: 26379
+
+---
+# Default deny all ingress traffic (security best practice)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: location-sync-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# Note: These network policies assume:
+# 1. A CNI plugin that supports NetworkPolicy (Calico, Cilium, Weave Net)
+# 2. Namespace labels are applied for cross-namespace communication
+# 3. Monitoring namespace has label: name=monitoring
+# 4. Ingress namespace has label: name=ingress-nginx
+#
+# Apply namespace labels:
+# kubectl label namespace monitoring name=monitoring
+# kubectl label namespace ingress-nginx name=ingress-nginx
+# kubectl label namespace kube-system name=kube-system

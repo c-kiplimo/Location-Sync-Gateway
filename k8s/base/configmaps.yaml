@@ -1,0 +1,252 @@
+# ============================================================
+# CONFIGMAPS - Non-sensitive configuration data
+# ============================================================
+#
+# PURPOSE:
+#   - Stores environment variables that are NOT secret
+#   - Separates configuration from application code
+#   - Can be updated without rebuilding Docker images
+#   - Shared across multiple pods
+#
+# WHAT TO STORE HERE:
+#   ✅ URLs and endpoints
+#   ✅ Feature flags
+#   ✅ Log levels
+#   ✅ Application settings
+#   ✅ Non-sensitive environment variables
+#
+# WHAT NOT TO STORE HERE:
+#   ❌ Passwords (use secrets.yaml)
+#   ❌ API keys (use secrets.yaml)
+#   ❌ Certificates (use secrets.yaml)
+#   ❌ Tokens (use secrets.yaml)
+#
+# HOW PODS USE THIS:
+#   env:
+#     - name: LOG_LEVEL
+#       valueFrom:
+#         configMapKeyRef:
+#           name: app-config
+#           key: LOG_LEVEL
+#
+# HOW TO APPLY:
+#   kubectl apply -f configmaps.yaml
+#
+# HOW TO VIEW:
+#   kubectl get configmaps
+#   kubectl describe configmap app-config
+#
+# HOW TO UPDATE:
+#   1. Edit this file
+#   2. kubectl apply -f configmaps.yaml
+#   3. kubectl rollout restart deployment/gateway  # Restart pods to pick up changes
+#
+# ============================================================
+
+---
+# Application Configuration
+# Used by: Gateway service, AI service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config                # Name referenced by pods
+  namespace: location-sync
+  labels:
+    app: location-sync-platform
+data:
+  # ===== APPLICATION SETTINGS =====
+
+  # Logging level (DEBUG, INFO, WARN, ERROR)
+  LOG_LEVEL: "INFO"
+
+  # Micronaut environment (dev, test, prod)
+  MICRONAUT_ENVIRONMENTS: "prod"
+
+  # Application name
+  APPLICATION_NAME: "location-sync-gateway"
+
+  # ===== SERVICE URLs =====
+
+  # AI Service URL (internal Kubernetes DNS)
+  # Format: http://<service-name>:<port>
+  AI_SERVICE_URL: "http://ai-service:8081"
+
+  # Uberall API URL (external)
+  UBERALL_API_URL: "https://uberall.com/api/v1"
+
+  # ===== KAFKA CONFIGURATION =====
+
+  # Kafka bootstrap servers (internal Kubernetes DNS)
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+
+  # Kafka topics
+  KAFKA_TOPIC_SNAPSHOTS: "location-snapshots"
+  KAFKA_TOPIC_CONFLICTS: "location-conflicts"
+  KAFKA_TOPIC_DECISIONS: "location-decisions"
+
+  # Kafka consumer group ID
+  KAFKA_CONSUMER_GROUP_ID: "location-sync-gateway-group"
+
+  # Kafka replication factor (1 for single broker, 3 for production)
+  KAFKA_REPLICATION_FACTOR: "1"
+
+  # ===== REDIS CONFIGURATION =====
+
+  # Redis host (internal Kubernetes DNS)
+  REDIS_HOST: "redis"
+
+  # Redis port
+  REDIS_PORT: "6379"
+
+  # Redis database number
+  REDIS_DATABASE: "0"
+
+  # Cache TTL in seconds (1 hour)
+  REDIS_CACHE_TTL: "3600"
+
+  # ===== DATABASE CONFIGURATION =====
+
+  # PostgreSQL host (internal Kubernetes DNS)
+  POSTGRES_HOST: "postgres"
+
+  # PostgreSQL port
+  POSTGRES_PORT: "5432"
+
+  # Database name
+  POSTGRES_DB: "location_sync_gateway"
+
+  # Connection pool settings
+  DATASOURCES_DEFAULT_MINIMUM_IDLE: "2"
+  DATASOURCES_DEFAULT_MAXIMUM_POOL_SIZE: "10"
+
+  # ===== MONITORING CONFIGURATION =====
+
+  # Enable Prometheus metrics
+  PROMETHEUS_ENABLED: "true"
+
+  # Metrics export enabled
+  METRICS_EXPORT_ENABLED: "true"
+
+  # Metrics endpoint path
+  METRICS_PATH: "/metrics"
+
+  # ===== FEATURE FLAGS =====
+
+  # Enable conflict detection
+  FEATURE_CONFLICT_DETECTION_ENABLED: "true"
+
+  # Enable AI quality scoring
+  FEATURE_AI_QUALITY_SCORING_ENABLED: "true"
+
+  # Enable anomaly detection
+  FEATURE_ANOMALY_DETECTION_ENABLED: "true"
+
+  # Enable simulation endpoints (disable in production!)
+  FEATURE_SIMULATION_ENABLED: "false"
+
+  # ===== PERFORMANCE TUNING =====
+
+  # HTTP client timeout (milliseconds)
+  HTTP_CLIENT_TIMEOUT: "30000"
+
+  # AI service call timeout (milliseconds)
+  AI_SERVICE_TIMEOUT: "30000"
+
+  # Max retry attempts
+  MAX_RETRY_ATTEMPTS: "3"
+
+  # Retry backoff (milliseconds)
+  RETRY_BACKOFF_MS: "1000"
+
+---
+# Nginx Configuration
+# Used by: Nginx reverse proxy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: location-sync
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        # Rate limiting zones
+        limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+        limit_req_zone $binary_remote_addr zone=ai_limit:10m rate=5r/s;
+
+        # Upstream services
+        upstream gateway {
+            server gateway-service:8080;
+        }
+
+        upstream ai-service {
+            server ai-service:8081;
+        }
+
+        # Gateway API
+        server {
+            listen 80;
+            server_name api.your-domain.com;
+
+            location / {
+                limit_req zone=api_limit burst=20;
+                proxy_pass http://gateway;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+        }
+
+        # AI Service API
+        server {
+            listen 80;
+            server_name ai.your-domain.com;
+
+            location / {
+                limit_req zone=ai_limit burst=10;
+                proxy_pass http://ai-service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+        }
+    }
+
+---
+# Prometheus Configuration
+# Used by: Prometheus for metrics scraping
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: location-sync
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s      # How often to scrape targets
+      evaluation_interval: 15s  # How often to evaluate rules
+
+    scrape_configs:
+      # Scrape Gateway metrics
+      - job_name: 'gateway'
+        static_configs:
+          - targets: ['gateway-service:8080']
+        metrics_path: '/metrics'
+
+      # Scrape AI Service metrics
+      - job_name: 'ai-service'
+        static_configs:
+          - targets: ['ai-service:8081']
+        metrics_path: '/metrics'
+
+      # Scrape Kubernetes metrics
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true

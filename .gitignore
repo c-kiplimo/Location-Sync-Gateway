@@ -41,3 +41,8 @@ docs/
 
 # MVP README (keep local only)
 docs/MVP1-README.md
+
+# Temporary files
+tmpclaude-*
+nul
+reset_db.sql

@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: location-sync-gateway-config
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+data:
+  # Database configuration
+  db.host: "postgres-service.location-sync-gateway.svc.cluster.local"
+  db.port: "5432"
+  db.name: "location_sync_gateway"
+
+  # Kafka configuration
+  kafka.bootstrap.servers: "kafka-service.location-sync-gateway.svc.cluster.local:9092"
+
+  # Redis configuration
+  redis.host: "redis-service.location-sync-gateway.svc.cluster.local"
+  redis.port: "6379"
+
+  # Application configuration
+  application.yml: |
+    micronaut:
+      application:
+        name: location-sync-gateway
+      server:
+        port: 8080
+
+    kafka:
+      bootstrap:
+        servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+    datasources:
+      default:
+        url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+        username: ${DB_USER}
+        password: ${DB_PASSWORD}
+
+    redis:
+      uri: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379
+
+    location-sync-gateway:
+      quality:
+        enabled: true
+        critical-threshold: 40
+      anomaly-detection:
+        enabled: ${ANOMALY_DETECTION_ENABLED:true}
+      ml-prediction:
+        enabled: ${ML_PREDICTION_ENABLED:false}
+
+  # Resolution rules
+  resolution-rules.yml: |
+    rules:
+      - name: google-opening-hours-franchisee
+        fieldType: OPENING_HOURS
+        source: GOOGLE_MY_BUSINESS
+        defaultOutcome: AUTO_ACCEPT
+        minimumConfidence: 0.9
+        priority: 100
+        enabled: true
+
+      - name: google-phone-hq-override
+        fieldType: PHONE
+        source: GOOGLE_MY_BUSINESS
+        defaultOutcome: AUTO_REVERT
+        minimumConfidence: 1.0
+        priority: 200
+        enabled: true
+
+      - name: google-category-brand-standard
+        fieldType: CATEGORIES
+        source: GOOGLE_MY_BUSINESS
+        defaultOutcome: AUTO_REVERT
+        minimumConfidence: 1.0
+        priority: 200
+        enabled: true

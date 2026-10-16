@@ -1,0 +1,104 @@
+micronaut:
+  application:
+    name: location-sync-gateway-test
+  server:
+    port: -1  # Random port for tests
+
+# Test database configuration (uses Testcontainers)
+datasources:
+  default:
+    url: jdbc:tc:postgresql:15:///test_db
+    driverClassName: org.testcontainers.jdbc.ContainerDatabaseDriver
+    username: test
+    password: test
+    schema-generate: CREATE_DROP
+    dialect: POSTGRES
+
+# Flyway disabled for unit tests (enabled for integration tests)
+flyway:
+  datasources:
+    default:
+      enabled: false
+
+# Kafka test configuration
+kafka:
+  bootstrap:
+    servers: localhost:9092  # Override by Testcontainers in tests
+  producers:
+    default:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.micronaut.kafka.serdes.JsonSerializer
+      acks: all
+      retries: 0
+      max-in-flight-requests-per-connection: 1
+  consumers:
+    default:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.micronaut.kafka.serdes.JsonDeserializer
+      group-id: test-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+# Redis test configuration
+redis:
+  uri: redis://localhost:6379
+  caches:
+    location-data:
+      expire-after-write: 1m
+    oauth-tokens:
+      expire-after-write: 5m
+
+# Disable scheduler in tests
+scheduler:
+  ingestion:
+    enabled: false
+
+# Test-specific configuration
+location-sync-gateway:
+  quality:
+    enabled: true
+    critical-threshold: 40
+  anomaly-detection:
+    enabled: true
+    threshold: 0.7
+  ml-prediction:
+    enabled: false  # Disable ML in tests for faster execution
+
+# Mock external services
+google:
+  oauth:
+    clientId: test-client-id
+    clientSecret: test-client-secret
+
+uberall:
+  api:
+    baseUrl: http://localhost:8080/mock-uberall
+    privateKey: test-private-key
+
+# Notifications disabled in tests
+notifications:
+  slack:
+    webhookUrl: http://localhost:8080/mock-slack
+    channel: "#test-alerts"
+  email:
+    enabled: false
+
+# Logging configuration for tests
+logger:
+  levels:
+    com.locationsync.gateway: DEBUG
+    io.micronaut: INFO
+    org.testcontainers: INFO
+
+# Metrics disabled in tests
+endpoints:
+  prometheus:
+    enabled: false
+  health:
+    enabled: true
+    details-visible: ANONYMOUS
+
+# Tracing disabled in tests
+tracing:
+  jaeger:
+    enabled: false

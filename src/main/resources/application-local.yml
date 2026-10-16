@@ -1,0 +1,67 @@
+# Local development configuration with all services
+micronaut:
+  application:
+    name: location-sync-gateway
+  server:
+    port: 8080
+
+# PostgreSQL (local installation)
+datasources:
+  default:
+    url: jdbc:postgresql://localhost:5432/location_sync_gateway
+    driverClassName: org.postgresql.Driver
+    username: postgres
+    password: smartcode
+    dialect: POSTGRES
+    schema-generate: NONE
+    maximum-pool-size: 20
+    minimum-idle: 5
+
+# Flyway enabled
+flyway:
+  datasources:
+    default:
+      enabled: true
+      locations: classpath:db/migration
+      baseline-on-migrate: true
+
+# Kafka configuration - DISABLED for now
+kafka:
+  enabled: false
+
+# Redis configuration
+redis:
+  uri: redis://:redis_password@localhost:6379
+  caches:
+    location-data:
+      expire-after-write: 5m
+    oauth-tokens:
+      expire-after-write: 55m
+
+# Disable scheduler for local development
+scheduler:
+  ingestion:
+    enabled: false
+
+# AI/ML - Disable for local development
+location-sync-gateway:
+  quality:
+    enabled: true
+  anomaly-detection:
+    enabled: false
+  ml-prediction:
+    enabled: false
+  llm-explanations:
+    enabled: false
+
+# Logging
+logger:
+  levels:
+    com.locationsync.gateway: DEBUG
+    io.micronaut.http: INFO
+    org.apache.kafka: WARN
+
+# Tracing disabled for local
+micronaut:
+  tracing:
+    enabled: false

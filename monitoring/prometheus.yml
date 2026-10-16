@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'location-sync-gateway-local'
+    environment: 'development'
+
+scrape_configs:
+  # Application metrics
+  - job_name: 'location-sync-gateway'
+    metrics_path: '/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          service: 'location-sync-gateway'
+          component: 'application'
+
+  # Kafka metrics (JMX Exporter)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9101']
+        labels:
+          service: 'kafka'
+          component: 'message-broker'
+
+  # PostgreSQL metrics (requires postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:9187']
+        labels:
+          service: 'postgres'
+          component: 'database'
+
+  # Redis metrics (requires redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'

@@ -1,0 +1,192 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: location-sync-gateway
+  namespace: location-sync-gateway
+  labels:
+    app: location-sync-gateway
+    version: v1
+    component: application
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: location-sync-gateway
+  template:
+    metadata:
+      labels:
+        app: location-sync-gateway
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/prometheus"
+    spec:
+      serviceAccountName: location-sync-gateway
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - location-sync-gateway
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+      - name: application
+        image: location-sync-gateway:latest
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: management
+          containerPort: 8081
+          protocol: TCP
+
+        env:
+        # Database configuration
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: location-sync-gateway-config
+              key: db.host
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: location_sync_gateway
+        - name: DB_USER
+          value: lsg
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: db-password
+
+        # Kafka configuration
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: location-sync-gateway-config
+              key: kafka.bootstrap.servers
+
+        # Redis configuration
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: location-sync-gateway-config
+              key: redis.host
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: redis-password
+
+        # External API keys
+        - name: GOOGLE_OAUTH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: google-oauth-client-id
+              optional: true
+        - name: GOOGLE_OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: google-oauth-client-secret
+              optional: true
+        - name: UBERALL_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: uberall-private-key
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: location-sync-gateway-secrets
+              key: openai-api-key
+              optional: true
+
+        # Application configuration
+        - name: LOG_LEVEL
+          value: INFO
+        - name: SCHEDULER_ENABLED
+          value: "true"
+        - name: ANOMALY_DETECTION_ENABLED
+          value: "true"
+        - name: ML_PREDICTION_ENABLED
+          value: "false"
+        - name: LLM_EXPLANATIONS_ENABLED
+          value: "false"
+
+        # JVM options
+        - name: JAVA_OPTS
+          value: >-
+            -XX:+UseContainerSupport
+            -XX:MaxRAMPercentage=75.0
+            -XX:InitialRAMPercentage=50.0
+            -XX:+UseG1GC
+            -XX:MaxGCPauseMillis=200
+            -XX:+UseStringDeduplication
+            -Djava.security.egd=file:/dev/./urandom
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+
+      terminationGracePeriodSeconds: 30
